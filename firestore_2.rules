@@ -1,0 +1,82 @@
+rules_version = '2';
+
+// ============================================================
+// Reglas de seguridad — Evaluación de Desempeño PYA
+// ============================================================
+// Idea central: separar "get" (pedir UN documento cuyo id ya conoces)
+// de "list" (consultar/enumerar la colección completa).
+//
+//   - get:  público. Así el propio formulario puede preguntar "¿ya
+//           respondí esto?" sin que la persona inicie sesión.
+//   - list: solo alguien de la lista ADMIN_EMAILS de abajo, autenticado
+//           con Google. Esto es lo que protege de verdad el consolidado:
+//           nadie anónimo puede volcar todos los registros de una vez, y
+//           ni siquiera un colaborador cualquiera con correo
+//           @pyaconsulting.cl puede — solo las personas nombradas
+//           explícitamente aquí.
+//
+// Para agregar o quitar a alguien de Resultados, edita la lista de abajo
+// y vuelve a pegar/publicar este archivo en Firebase — no requiere tocar
+// index.html.
+//
+// Límite conocido: el id de cada documento incluye el id numérico del
+// colaborador (1-32, secuencial). Alguien que adivine esos ids podría,
+// en teoría, pedir registros de otras personas uno por uno con get().
+// Subir el nivel de protección más allá de esto (ids opacos/aleatorios
+// por colaborador, o exigir autenticación también para escribir)
+// es un cambio disponible más adelante si se necesita.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAdmin() {
+      return request.auth != null
+        && request.auth.token.email != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.email.lower() in [
+          'daslav.i.puhalovic@pyaconsulting.cl',
+          'patricia.e.soto@pyaconsulting.cl',
+          'sebastian.m.otaiza@pyaconsulting.cl',
+          'paulina.a.cepeda@pyaconsulting.cl'
+        ];
+    }
+
+    // ---- responses/{fileKey}_{empId} — el contenido real (notas,
+    // respuestas, comentarios). ----
+    match /responses/{docId} {
+      allow get: if true;
+      allow list: if isAdmin();
+
+      allow create, update: if
+        docId == (request.resource.data.fileKey + '_' + string(request.resource.data.empId))
+        && isValidResponseShape(request.resource.data)
+        && (
+          (request.resource.data.fileKey != 'resultados')
+          || isAdmin()
+        );
+
+      allow delete: if isAdmin();
+    }
+
+    // ---- status/{fileKey}_{empId} — solo "existe o no existe", sin
+    // notas. Pública de lectura para que la pestaña Evaluación pueda
+    // mostrar "12/32 evaluados" sin necesitar sesión. ----
+    match /status/{docId} {
+      allow get, list: if true;
+
+      allow create, update: if
+        docId == (request.resource.data.fileKey + '_' + string(request.resource.data.empId))
+        && request.resource.data.fileKey in ['autoeval','gerencia','lider','liderGestion','ch']
+        && request.resource.data.empId is number
+        && request.resource.data.done == true;
+
+      allow delete: if isAdmin();
+    }
+
+    function isValidResponseShape(d) {
+      return d.fileKey in ['autoeval','gerencia','lider','liderGestion','ch','resultados']
+        && d.empId is number
+        && d.data is map;
+    }
+  }
+}
