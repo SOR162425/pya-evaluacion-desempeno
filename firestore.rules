@@ -66,7 +66,7 @@ service cloud.firestore {
 
       allow create, update: if
         docId == (request.resource.data.fileKey + '_' + string(request.resource.data.empId))
-        && request.resource.data.fileKey in ['autoeval','gerencia','lider','liderGestion','ch']
+        && request.resource.data.fileKey in ['autoeval','gerenteGeneral','gerenteProyectos','gerenteEnergia','liderCapitalHumano','liderGestion','liderArea']
         && request.resource.data.empId is number
         && request.resource.data.done == true;
 
@@ -74,7 +74,7 @@ service cloud.firestore {
     }
 
     function isValidResponseShape(d) {
-      return d.fileKey in ['autoeval','gerencia','lider','liderGestion','ch','resultados']
+      return d.fileKey in ['autoeval','gerenteGeneral','gerenteProyectos','gerenteEnergia','liderCapitalHumano','liderGestion','liderArea','resultados']
         && d.empId is number
         && d.data is map;
     }
